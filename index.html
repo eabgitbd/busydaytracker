@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DayFlow — Daily Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f14;
+    --surface: #161820;
+    --card: #1e2030;
+    --card2: #252840;
+    --border: #2e3150;
+    --accent: #7c6af7;
+    --accent2: #f7a26a;
+    --accent3: #6af7c3;
+    --text: #e8eaf6;
+    --text2: #9099c4;
+    --text3: #5a6090;
+    --danger: #f76a6a;
+    --success: #6af7a0;
+    --warn: #f7d26a;
+    --radius: 14px;
+    --radius-sm: 8px;
+    --shadow: 0 4px 32px rgba(0,0,0,0.4);
+    --font-display: 'DM Serif Display', serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+
+  /* ===== LAYOUT ===== */
+  #app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  #topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 8px; }
+  #main { display: flex; flex: 1; overflow: hidden; }
+  #sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  #content { flex: 1; overflow-y: auto; padding: 16px; }
+  #content::-webkit-scrollbar { width: 4px; } #content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* ===== TOPBAR ===== */
+  .topbar-brand { font-family: var(--font-display); font-size: 1.3rem; color: var(--accent); letter-spacing: .5px; white-space: nowrap; }
+  .topbar-date { font-size: 0.78rem; color: var(--text2); white-space: nowrap; }
+  .topbar-actions { display: flex; gap: 6px; align-items: center; }
+  .btn-icon { background: var(--card); border: 1px solid var(--border); color: var(--text2); border-radius: var(--radius-sm); padding: 6px 10px; cursor: pointer; font-size: 0.75rem; display: flex; align-items: center; gap: 5px; transition: all .2s; white-space: nowrap; }
+  .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-icon.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #google-status { font-size: 0.7rem; padding: 4px 8px; border-radius: 20px; border: 1px solid var(--border); background: var(--card); color: var(--text3); white-space: nowrap; }
+  #google-status.connected { border-color: var(--success); color: var(--success); }
+
+  /* ===== SIDEBAR — CALENDAR ===== */
+  .sidebar-cal { padding: 12px; }
+  .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .cal-month { font-weight: 600; font-size: 0.85rem; color: var(--text); }
+  .cal-nav { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; transition: color .2s; }
+  .cal-nav:hover { color: var(--accent); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-dow { font-size: 0.6rem; color: var(--text3); text-align: center; padding: 2px 0; font-weight: 600; letter-spacing: .5px; }
+  .cal-day { font-size: 0.72rem; text-align: center; padding: 4px 2px; cursor: pointer; border-radius: 6px; color: var(--text2); transition: all .15s; position: relative; }
+  .cal-day:hover { background: var(--card2); color: var(--text); }
+  .cal-day.today { background: var(--accent); color: #fff; font-weight: 700; }
+  .cal-day.selected { background: var(--accent2); color: #0e0f14; font-weight: 700; }
+  .cal-day.has-tasks::after { content: ''; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background: var(--accent3); border-radius: 50%; }
+  .cal-day.other-month { color: var(--text3); opacity: 0.5; }
+  .sidebar-sep { height: 1px; background: var(--border); margin: 8px 12px; }
+  .sidebar-stats { padding: 12px; }
+  .sidebar-stats h4 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-bottom: 10px; }
+  .stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.78rem; }
+  .stat-label { color: var(--text2); }
+  .stat-val { font-weight: 600; color: var(--text); }
+  .mini-ring { display: flex; align-items: center; gap: 6px; }
+  .ring-wrap { position: relative; width: 38px; height: 38px; }
+  .ring-svg { transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--card2); stroke-width: 4; }
+  .ring-prog { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset .5s ease; }
+  .ring-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; color: var(--text); }
+  .sidebar-bottom { margin-top: auto; padding: 12px; border-top: 1px solid var(--border); }
+  .backup-row { display: flex; gap: 6px; }
+  .btn-sm { flex: 1; background: var(--card2); border: 1px solid var(--border); color: var(--text2); border-radius: var(--radius-sm); padding: 7px 8px; cursor: pointer; font-size: 0.7rem; text-align: center; transition: all .2s; font-family: var(--font-body); }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-sm.primary:hover { opacity: .85; }
+
+  /* ===== CONTENT AREA ===== */
+  .day-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .day-title { font-family: var(--font-display); font-size: 1.6rem; color: var(--text); }
+  .day-subtitle { font-size: 0.78rem; color: var(--text2); margin-top: 2px; }
+  .btn-add { background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 8px 16px; cursor: pointer; font-size: 0.8rem; font-family: var(--font-body); font-weight: 600; transition: opacity .2s; display: flex; align-items: center; gap: 6px; }
+  .btn-add:hover { opacity: .85; }
+
+  /* Progress bar */
+  .progress-section { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+  .progress-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .progress-label { font-size: 0.78rem; color: var(--text2); }
+  .progress-pct { font-family: var(--font-display); font-size: 1.4rem; color: var(--accent); }
+  .progress-bar-wrap { height: 8px; background: var(--card2); border-radius: 99px; overflow: hidden; margin-bottom: 8px; }
+  .progress-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .5s ease; }
+  .progress-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { font-size: 0.67rem; padding: 3px 8px; border-radius: 20px; border: 1px solid; font-weight: 500; }
+  .chip.done { border-color: var(--success); color: var(--success); background: rgba(106,247,160,0.08); }
+  .chip.pending { border-color: var(--warn); color: var(--warn); background: rgba(247,210,106,0.08); }
+  .chip.missed { border-color: var(--danger); color: var(--danger); background: rgba(247,106,106,0.08); }
+
+  /* Task sections */
+  .time-section { margin-bottom: 14px; }
+  .time-section-header { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-bottom: 8px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .time-section-header::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* Task card */
+  .task-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; display: flex; gap: 12px; align-items: flex-start; transition: border-color .2s, transform .15s; cursor: default; position: relative; overflow: hidden; }
+  .task-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); border-radius: 3px 0 0 3px; }
+  .task-card.done::before { background: var(--success); }
+  .task-card.missed::before { background: var(--danger); }
+  .task-card:hover { border-color: var(--accent); transform: translateX(2px); }
+  .task-check { width: 20px; height: 20px; border: 2px solid var(--border); border-radius: 50%; cursor: pointer; flex-shrink: 0; margin-top: 2px; transition: all .2s; display: flex; align-items: center; justify-content: center; }
+  .task-check:hover { border-color: var(--accent); }
+  .task-card.done .task-check { background: var(--success); border-color: var(--success); }
+  .task-check-tick { display: none; color: #0e0f14; font-size: 0.65rem; font-weight: 900; }
+  .task-card.done .task-check-tick { display: block; }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-size: 0.85rem; font-weight: 500; color: var(--text); word-break: break-word; }
+  .task-card.done .task-title { text-decoration: line-through; color: var(--text3); }
+  .task-meta { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; align-items: center; }
+  .task-time { font-size: 0.68rem; color: var(--accent2); }
+  .task-cat { font-size: 0.65rem; padding: 2px 6px; border-radius: 20px; border: 1px solid var(--border); color: var(--text3); }
+  .task-remark { font-size: 0.72rem; color: var(--text2); margin-top: 5px; line-height: 1.4; border-left: 2px solid var(--border); padding-left: 7px; font-style: italic; }
+  .task-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .2s; }
+  .task-card:hover .task-actions { opacity: 1; }
+  .task-btn { background: var(--card2); border: 1px solid var(--border); color: var(--text3); border-radius: 5px; padding: 3px 7px; cursor: pointer; font-size: 0.68rem; transition: all .2s; }
+  .task-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .task-btn.del:hover { color: var(--danger); border-color: var(--danger); }
+
+  /* Empty state */
+  .empty-day { text-align: center; padding: 40px 20px; color: var(--text3); }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 10px; opacity: .4; }
+  .empty-text { font-size: 0.85rem; }
+
+  /* ===== MODAL ===== */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow); }
+  .modal::-webkit-scrollbar { width: 3px; } .modal::-webkit-scrollbar-thumb { background: var(--border); }
+  .modal-title { font-family: var(--font-display); font-size: 1.2rem; margin-bottom: 16px; color: var(--text); }
+  .form-group { margin-bottom: 12px; }
+  .form-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--text3); margin-bottom: 5px; display: block; }
+  .form-input, .form-select, .form-textarea { width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 0.82rem; font-family: var(--font-body); transition: border-color .2s; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--accent); }
+  .form-select option { background: var(--card); }
+  .form-textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
+  .form-row { display: flex; gap: 10px; }
+  .form-row .form-group { flex: 1; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .btn-cancel { background: var(--card); border: 1px solid var(--border); color: var(--text2); border-radius: var(--radius-sm); padding: 8px 16px; cursor: pointer; font-size: 0.8rem; font-family: var(--font-body); }
+  .btn-save { background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 8px 18px; cursor: pointer; font-size: 0.8rem; font-family: var(--font-body); font-weight: 600; }
+  .btn-save:hover { opacity: .85; }
+
+  /* ===== TOAST ===== */
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--card2); border: 1px solid var(--border); color: var(--text); padding: 9px 18px; border-radius: 20px; font-size: 0.78rem; z-index: 200; transition: transform .3s ease; pointer-events: none; white-space: nowrap; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--success); color: var(--success); }
+  #toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* ===== MOBILE (portrait / small screen) ===== */
+  @media (max-width: 700px) {
+    #sidebar { display: none; }
+    #sidebar.show { display: flex; position: fixed; inset: 0; z-index: 90; width: 100%; overflow-y: auto; }
+    .topbar-brand { font-size: 1.05rem; }
+    .day-title { font-size: 1.2rem; }
+    .modal { max-width: 100%; }
+  }
+
+  /* ===== LANDSCAPE TABLET ===== */
+  @media (min-width: 701px) and (max-width: 1100px) {
+    #sidebar { width: 220px; }
+  }
+
+  /* spinner */
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Google sign-in btn */
+  #btn-google { display: flex; align-items: center; gap: 7px; background: #fff; color: #444; border: 1px solid #ddd; border-radius: var(--radius-sm); padding: 7px 12px; cursor: pointer; font-size: 0.78rem; font-family: var(--font-body); font-weight: 500; transition: box-shadow .2s; }
+  #btn-google:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  .g-icon { width: 14px; height: 14px; }
+
+  /* Summary view */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .summary-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; text-align: center; }
+  .summary-num { font-family: var(--font-display); font-size: 2rem; color: var(--accent); }
+  .summary-desc { font-size: 0.72rem; color: var(--text2); margin-top: 3px; }
+  .heatmap-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 16px; overflow-x: auto; }
+  .heatmap-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-bottom: 12px; }
+  .heatmap { display: flex; gap: 3px; }
+  .heatmap-col { display: flex; flex-direction: column; gap: 3px; }
+  .heatmap-cell { width: 12px; height: 12px; border-radius: 2px; background: var(--card2); cursor: pointer; transition: transform .1s; }
+  .heatmap-cell:hover { transform: scale(1.3); }
+  .heatmap-cell.l1 { background: rgba(124,106,247,0.2); }
+  .heatmap-cell.l2 { background: rgba(124,106,247,0.45); }
+  .heatmap-cell.l3 { background: rgba(124,106,247,0.7); }
+  .heatmap-cell.l4 { background: var(--accent); }
+  .view-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .view-tab { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--card); color: var(--text2); font-size: 0.75rem; cursor: pointer; transition: all .2s; }
+  .view-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* setup instructions */
+  .setup-box { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  .setup-box h3 { font-size: 0.85rem; color: var(--accent2); margin-bottom: 8px; }
+  .setup-box p, .setup-box li { font-size: 0.75rem; color: var(--text2); line-height: 1.6; }
+  .setup-box ol { padding-left: 14px; }
+  .setup-box code { background: var(--card2); border-radius: 3px; padding: 1px 5px; color: var(--accent); font-size: 0.7rem; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="btn-icon" id="btn-sidebar-toggle" title="Toggle sidebar">☰</button>
+      <div>
+        <div class="topbar-brand">DayFlow</div>
+      </div>
+    </div>
+    <div id="topbar-date" class="topbar-date"></div>
+    <div class="topbar-actions">
+      <span id="google-status">Not signed in</span>
+      <button id="btn-google" onclick="handleGoogleAuth()">
+        <svg class="g-icon" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.58-13.45-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+        Sign in with Google
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <div class="sidebar-cal">
+        <div class="cal-header">
+          <button class="cal-nav" onclick="calNav(-1)">‹</button>
+          <span class="cal-month" id="cal-month-label"></span>
+          <button class="cal-nav" onclick="calNav(1)">›</button>
+        </div>
+        <div class="cal-grid" id="cal-dow"></div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+      <div class="sidebar-sep"></div>
+      <div class="sidebar-stats">
+        <h4>Today's Progress</h4>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div class="ring-wrap">
+            <svg class="ring-svg" width="38" height="38" viewBox="0 0 38 38">
+              <circle class="ring-bg" cx="19" cy="19" r="15"/>
+              <circle class="ring-prog" id="sidebar-ring" cx="19" cy="19" r="15" stroke-dasharray="94.2" stroke-dashoffset="94.2"/>
+            </svg>
+            <div class="ring-text" id="sidebar-ring-pct">0%</div>
+          </div>
+          <div>
+            <div style="font-size:0.78rem;color:var(--text);" id="sidebar-done-count">0/0 done</div>
+            <div style="font-size:0.68rem;color:var(--text3);margin-top:2px">today</div>
+          </div>
+        </div>
+        <div class="stat-row"><span class="stat-label">This week</span><span class="stat-val" id="stat-week">—</span></div>
+        <div class="stat-row"><span class="stat-label">This month</span><span class="stat-val" id="stat-month">—</span></div>
+        <div class="stat-row"><span class="stat-label">Total tasks</span><span class="stat-val" id="stat-total">—</span></div>
+      </div>
+      <div class="sidebar-bottom">
+        <div style="font-size:0.68rem;color:var(--text3);margin-bottom:6px">Backup &amp; Restore</div>
+        <div class="backup-row">
+          <button class="btn-sm primary" onclick="backupToDrive()">⬆ Backup</button>
+          <button class="btn-sm" onclick="restoreFromDrive()">⬇ Restore</button>
+          <button class="btn-sm" onclick="exportJSON()">⤓ Export</button>
+        </div>
+        <div id="backup-status" style="font-size:0.65rem;color:var(--text3);margin-top:6px;text-align:center;"></div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div id="content">
+      <div class="view-tabs">
+        <div class="view-tab active" onclick="setView('day',this)">Day</div>
+        <div class="view-tab" onclick="setView('summary',this)">Summary</div>
+      </div>
+      <div id="view-day"></div>
+      <div id="view-summary" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" style="display:none" onclick="closeModalOnOverlay(event)">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Add Task</div>
+    <div class="form-group">
+      <label class="form-label">Task Title *</label>
+      <input class="form-input" id="f-title" placeholder="What do you need to do?" maxlength="120">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Start Time</label>
+        <input class="form-input" id="f-start" type="time">
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Time</label>
+        <input class="form-input" id="f-end" type="time">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select class="form-select" id="f-cat">
+          <option value="General">General</option>
+          <option value="Work">Work</option>
+          <option value="Clinical">Clinical</option>
+          <option value="Study">Study</option>
+          <option value="Personal">Personal</option>
+          <option value="Health">Health</option>
+          <option value="Meeting">Meeting</option>
+          <option value="Family">Family</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <select class="form-select" id="f-priority">
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Remarks / Notes</label>
+      <textarea class="form-textarea" id="f-remark" placeholder="Any notes, details, or follow-up..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveTask()">Save Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- Google API -->
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<script>
+// ============================================================
+//  CONFIGURATION — replace with your Google Cloud credentials
+// ============================================================
+// IMPORTANT: To enable Google Drive backup:
+// 1. Go to https://console.cloud.google.com/
+// 2. Create a project → Enable "Google Drive API"
+// 3. Create OAuth 2.0 credentials (Web application)
+// 4. Add your hosting domain to Authorized JavaScript origins
+// 5. Replace the values below with your credentials
+const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_API_KEY   = 'YOUR_GOOGLE_API_KEY'; // for Drive picker (optional)
+const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';
+const BACKUP_FILENAME  = 'dayflow_backup.json';
+const BACKUP_MIME      = 'application/json';
+// ============================================================
+
+// ===== STATE =====
+let data = {}; // { "YYYY-MM-DD": [ taskObj, ... ] }
+let selectedDate = todayStr();
+let calViewDate  = new Date();
+let googleUser   = null;
+let gisClient    = null;
+let currentView  = 'day';
+let editingTask  = null; // { date, idx } when editing
+
+// ===== HELPERS =====
+function todayStr() {
+  const d = new Date(); return fmtDate(d);
+}
+function fmtDate(d) {
+  return d.toISOString().split('T')[0];
+}
+function parseDate(s) {
+  const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d);
+}
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+}
+function dayName(d) {
+  return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+}
+function monthName(d) {
+  return d.toLocaleString('default',{month:'long',year:'numeric'});
+}
+function shortMonth(d) {
+  return d.toLocaleString('default',{month:'short'});
+}
+
+// ===== DATA PERSISTENCE (localStorage) =====
+function loadData() {
+  try { const s = localStorage.getItem('dayflow_data'); if (s) data = JSON.parse(s); } catch(e){}
+}
+function saveData() {
+  try { localStorage.setItem('dayflow_data', JSON.stringify(data)); } catch(e){}
+  renderAll();
+}
+
+// ===== TOAST =====
+let toastTimer;
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = type ? `show ${type}` : 'show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.className=''; }, 2800);
+}
+
+// ===== GOOGLE AUTH (GIS) =====
+function initGoogleAuth() {
+  if (typeof google === 'undefined' || !google.accounts) { setTimeout(initGoogleAuth, 500); return; }
+  if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') return;
+  gisClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: SCOPES,
+    callback: (tokenResp) => {
+      if (tokenResp.access_token) {
+        googleUser = { token: tokenResp.access_token };
+        document.getElementById('google-status').textContent = '● Connected';
+        document.getElementById('google-status').className = 'connected';
+        document.getElementById('btn-google').style.display = 'none';
+        toast('Google Drive connected ✓', 'success');
+      }
+    }
+  });
+}
+function handleGoogleAuth() {
+  if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('YOUR_')) {
+    toast('⚠ Set your Google Client ID in the code first', 'error'); showSetupInfo(); return;
+  }
+  if (!gisClient) { toast('Google API not ready', 'error'); return; }
+  gisClient.requestAccessToken();
+}
+function signOut() {
+  if (googleUser && typeof google !== 'undefined') {
+    google.accounts.oauth2.revoke(googleUser.token, ()=>{});
+    googleUser = null;
+  }
+  document.getElementById('google-status').textContent = 'Not signed in';
+  document.getElementById('google-status').className = '';
+  document.getElementById('btn-google').style.display = 'flex';
+}
+
+// ===== GOOGLE DRIVE BACKUP =====
+async function backupToDrive() {
+  if (!googleUser) { toast('Sign in with Google first', 'error'); return; }
+  const bs = document.getElementById('backup-status');
+  bs.innerHTML = '<span class="spinner"></span> Backing up...';
+  try {
+    const json = JSON.stringify(data);
+    const blob = new Blob([json], { type: BACKUP_MIME });
+    // Check if file exists in appDataFolder
+    const listRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${BACKUP_FILENAME}'`,
+      { headers: { Authorization: `Bearer ${googleUser.token}` } }
+    );
+    const listJson = await listRes.json();
+    let fileId = listJson.files && listJson.files[0] ? listJson.files[0].id : null;
+
+    let method, url;
+    if (fileId) {
+      method = 'PATCH'; url = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
+    } else {
+      method = 'POST'; url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+    }
+    const metadata = { name: BACKUP_FILENAME, ...(fileId ? {} : { parents: ['appDataFolder'] }) };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', blob);
+    const res = await fetch(url, { method, headers: { Authorization: `Bearer ${googleUser.token}` }, body: form });
+    if (res.ok) {
+      bs.textContent = '✓ Backed up ' + new Date().toLocaleTimeString();
+      toast('Backup saved to Google Drive ✓', 'success');
+    } else {
+      throw new Error('Upload failed');
+    }
+  } catch(e) {
+    bs.textContent = '✗ Backup failed';
+    toast('Backup failed: ' + e.message, 'error');
+  }
+}
+async function restoreFromDrive() {
+  if (!googleUser) { toast('Sign in with Google first', 'error'); return; }
+  const bs = document.getElementById('backup-status');
+  bs.innerHTML = '<span class="spinner"></span> Restoring...';
+  try {
+    const listRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${BACKUP_FILENAME}'`,
+      { headers: { Authorization: `Bearer ${googleUser.token}` } }
+    );
+    const listJson = await listRes.json();
+    const fileId = listJson.files && listJson.files[0] ? listJson.files[0].id : null;
+    if (!fileId) { toast('No backup found on Drive', 'error'); bs.textContent = ''; return; }
+    const dlRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      { headers: { Authorization: `Bearer ${googleUser.token}` } }
+    );
+    const restored = await dlRes.json();
+    data = restored; saveData(); renderAll();
+    bs.textContent = '✓ Restored from Drive';
+    toast('Data restored from Google Drive ✓', 'success');
+  } catch(e) {
+    bs.textContent = '✗ Restore failed';
+    toast('Restore failed: ' + e.message, 'error');
+  }
+}
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `dayflow_export_${todayStr()}.json`;
+  a.click();
+  toast('Exported as JSON file ✓');
+}
+
+// ===== TASKS =====
+function getDay(dateStr) { return data[dateStr] || []; }
+function setDay(dateStr, tasks) { data[dateStr] = tasks; saveData(); }
+
+function openAddModal() {
+  editingTask = null;
+  document.getElementById('modal-title').textContent = 'Add Task — ' + selectedDate;
+  document.getElementById('f-title').value = '';
+  document.getElementById('f-start').value = '';
+  document.getElementById('f-end').value = '';
+  document.getElementById('f-cat').value = 'General';
+  document.getElementById('f-priority').value = 'normal';
+  document.getElementById('f-remark').value = '';
+  document.getElementById('modal').style.display = 'flex';
+  setTimeout(()=>document.getElementById('f-title').focus(), 100);
+}
+function openEditModal(dateStr, idx) {
+  const task = (data[dateStr]||[])[idx];
+  if (!task) return;
+  editingTask = { date: dateStr, idx };
+  document.getElementById('modal-title').textContent = 'Edit Task';
+  document.getElementById('f-title').value = task.title;
+  document.getElementById('f-start').value = task.start || '';
+  document.getElementById('f-end').value = task.end || '';
+  document.getElementById('f-cat').value = task.cat || 'General';
+  document.getElementById('f-priority').value = task.priority || 'normal';
+  document.getElementById('f-remark').value = task.remark || '';
+  document.getElementById('modal').style.display = 'flex';
+  setTimeout(()=>document.getElementById('f-title').focus(), 100);
+}
+function closeModal() { document.getElementById('modal').style.display = 'none'; editingTask = null; }
+function closeModalOnOverlay(e) { if (e.target.id === 'modal') closeModal(); }
+
+function saveTask() {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { document.getElementById('f-title').focus(); return; }
+  const task = {
+    id: editingTask ? (data[editingTask.date][editingTask.idx].id||uid()) : uid(),
+    title,
+    start: document.getElementById('f-start').value,
+    end: document.getElementById('f-end').value,
+    cat: document.getElementById('f-cat').value,
+    priority: document.getElementById('f-priority').value,
+    remark: document.getElementById('f-remark').value.trim(),
+    done: editingTask ? data[editingTask.date][editingTask.idx].done : false,
+    createdAt: editingTask ? data[editingTask.date][editingTask.idx].createdAt : Date.now()
+  };
+  if (editingTask) {
+    data[editingTask.date][editingTask.idx] = task;
+  } else {
+    if (!data[selectedDate]) data[selectedDate] = [];
+    data[selectedDate].push(task);
+  }
+  saveData(); closeModal();
+  toast(editingTask ? 'Task updated ✓' : 'Task added ✓', 'success');
+}
+
+function toggleDone(dateStr, idx) {
+  if (!data[dateStr] || !data[dateStr][idx]) return;
+  data[dateStr][idx].done = !data[dateStr][idx].done;
+  saveData();
+}
+function deleteTask(dateStr, idx) {
+  if (!data[dateStr]) return;
+  data[dateStr].splice(idx, 1);
+  saveData(); toast('Task deleted');
+}
+
+// ===== CALENDAR =====
+function calNav(dir) {
+  calViewDate = new Date(calViewDate.getFullYear(), calViewDate.getMonth()+dir, 1);
+  renderCalendar();
+}
+function renderCalendar() {
+  const dow = document.getElementById('cal-dow');
+  const grid = document.getElementById('cal-grid');
+  document.getElementById('cal-month-label').textContent = monthName(calViewDate);
+  dow.innerHTML = ['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  const y = calViewDate.getFullYear(), m = calViewDate.getMonth();
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m+1, 0).getDate();
+  const today = todayStr();
+  let html = '';
+  for (let i=0; i<first; i++) {
+    const prevDate = new Date(y, m, -first+1+i);
+    const ds = fmtDate(prevDate);
+    html += `<div class="cal-day other-month${ds===selectedDate?' selected':''}" onclick="selectDate('${ds}')">${prevDate.getDate()}</div>`;
+  }
+  for (let d=1; d<=days; d++) {
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const hasTasks = (data[ds]||[]).length > 0;
+    const cls = [
+      'cal-day',
+      ds===today?'today':'',
+      ds===selectedDate?'selected':'',
+      hasTasks?'has-tasks':''
+    ].filter(Boolean).join(' ');
+    html += `<div class="${cls}" onclick="selectDate('${ds}')">${d}</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function selectDate(ds) {
+  selectedDate = ds;
+  renderCalendar(); renderDayView(); renderSidebarStats();
+  // on mobile, close sidebar
+  if (window.innerWidth <= 700) document.getElementById('sidebar').classList.remove('show');
+}
+
+// ===== RENDER =====
+function renderAll() { renderCalendar(); renderDayView(); renderSidebarStats(); if(currentView==='summary') renderSummaryView(); }
+
+function renderSidebarStats() {
+  const today = todayStr();
+  const tasks = data[today]||[];
+  const done = tasks.filter(t=>t.done).length;
+  const total = tasks.length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  const circumference = 94.2;
+  const offset = circumference - (pct/100)*circumference;
+  document.getElementById('sidebar-ring').style.strokeDashoffset = offset;
+  document.getElementById('sidebar-ring-pct').textContent = pct+'%';
+  document.getElementById('sidebar-done-count').textContent = `${done}/${total} done`;
+
+  // week stats
+  const now = new Date();
+  const dow = now.getDay();
+  let wDone=0, wTotal=0;
+  for (let i=0; i<7; i++) {
+    const d = new Date(now); d.setDate(now.getDate()-dow+i);
+    const ts = data[fmtDate(d)]||[];
+    wTotal+=ts.length; wDone+=ts.filter(t=>t.done).length;
+  }
+  document.getElementById('stat-week').textContent = wTotal ? `${Math.round(wDone/wTotal*100)}%` : '—';
+
+  // month stats
+  let mDone=0, mTotal=0;
+  const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  Object.keys(data).filter(k=>k.startsWith(ym)).forEach(k=>{
+    const ts = data[k]||[]; mTotal+=ts.length; mDone+=ts.filter(t=>t.done).length;
+  });
+  document.getElementById('stat-month').textContent = mTotal ? `${Math.round(mDone/mTotal*100)}%` : '—';
+
+  let total2=0; Object.values(data).forEach(t=>{total2+=t.length;});
+  document.getElementById('stat-total').textContent = total2;
+}
+
+function renderDayView() {
+  const wrap = document.getElementById('view-day');
+  const tasks = (data[selectedDate]||[]).slice();
+  const d = parseDate(selectedDate);
+  const today = todayStr();
+
+  const done = tasks.filter(t=>t.done).length;
+  const total = tasks.length;
+  const missed = tasks.filter(t=>!t.done && selectedDate < today).length;
+  const pending = total - done - (selectedDate < today ? missed : 0);
+  const pct = total ? Math.round(done/total*100) : 0;
+
+  // Sort by start time
+  tasks.sort((a,b)=>{
+    if (!a.start && !b.start) return 0;
+    if (!a.start) return 1; if (!b.start) return -1;
+    return a.start.localeCompare(b.start);
+  });
+
+  // Group by period
+  const groups = { Morning:[], Afternoon:[], Evening:[], Night:[], Anytime:[] };
+  const origIdx = [];
+  (data[selectedDate]||[]).forEach((t,i)=>{
+    const h = t.start ? parseInt(t.start.split(':')[0]) : -1;
+    let grp = 'Anytime';
+    if (h>=5 && h<12) grp='Morning';
+    else if (h>=12 && h<17) grp='Afternoon';
+    else if (h>=17 && h<21) grp='Evening';
+    else if (h>=21 || h===0) grp='Night';
+    groups[grp].push({ task:t, origIdx:i });
+  });
+
+  let html = `
+  <div class="day-header">
+    <div>
+      <div class="day-title">${dayName(d)}, ${d.getDate()} ${shortMonth(d)}</div>
+      <div class="day-subtitle">${selectedDate === today ? '— Today' : selectedDate}</div>
+    </div>
+    <button class="btn-add" onclick="openAddModal()">＋ Add Task</button>
+  </div>
+  <div class="progress-section">
+    <div class="progress-top">
+      <span class="progress-label">Day Progress</span>
+      <span class="progress-pct">${pct}%</span>
+    </div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+    <div class="progress-chips">
+      <span class="chip done">✓ ${done} done</span>
+      ${pending > 0 ? `<span class="chip pending">⏳ ${pending} pending</span>` : ''}
+      ${missed > 0 ? `<span class="chip missed">✗ ${missed} missed</span>` : ''}
+      ${total===0 ? '<span class="chip pending">No tasks yet</span>' : ''}
+    </div>
+  </div>`;
+
+  const order = ['Morning','Afternoon','Evening','Night','Anytime'];
+  let hasAny = false;
+  order.forEach(grp => {
+    const items = groups[grp];
+    if (!items.length) return;
+    hasAny = true;
+    const icons = { Morning:'🌅', Afternoon:'☀️', Evening:'🌆', Night:'🌙', Anytime:'📌' };
+    html += `<div class="time-section"><div class="time-section-header">${icons[grp]} ${grp}</div>`;
+    items.forEach(({ task, origIdx: i }) => {
+      const isMissed = !task.done && selectedDate < today;
+      const cls = `task-card${task.done?' done':''}${isMissed?' missed':''}`;
+      const priorityDot = task.priority==='high' ? '🔴 ' : task.priority==='low' ? '🔵 ' : '';
+      html += `
+      <div class="${cls}" id="tc-${i}">
+        <div class="task-check" onclick="toggleDone('${selectedDate}',${i})">
+          <span class="task-check-tick">✓</span>
+        </div>
+        <div class="task-body">
+          <div class="task-title">${priorityDot}${escHtml(task.title)}</div>
+          <div class="task-meta">
+            ${task.start ? `<span class="task-time">🕐 ${task.start}${task.end?' – '+task.end:''}</span>` : ''}
+            <span class="task-cat">${escHtml(task.cat||'General')}</span>
+          </div>
+          ${task.remark ? `<div class="task-remark">${escHtml(task.remark)}</div>` : ''}
+        </div>
+        <div class="task-actions">
+          <button class="task-btn" onclick="openEditModal('${selectedDate}',${i})">✎</button>
+          <button class="task-btn del" onclick="deleteTask('${selectedDate}',${i})">✕</button>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  if (!hasAny) html += `<div class="empty-day"><div class="empty-icon">📋</div><div class="empty-text">No tasks for this day.<br>Tap <b>+ Add Task</b> to begin.</div></div>`;
+
+  wrap.innerHTML = html;
+}
+
+function renderSummaryView() {
+  const wrap = document.getElementById('view-summary');
+  const today = new Date();
+  // Overall stats
+  let totalTasks=0, doneTasks=0, activeDays=0;
+  const allDates = Object.keys(data).sort();
+  allDates.forEach(k=>{ const ts=data[k]||[]; if(ts.length){activeDays++; totalTasks+=ts.length; doneTasks+=ts.filter(t=>t.done).length;} });
+  const avgPct = activeDays ? Math.round(doneTasks/totalTasks*100) : 0;
+
+  // Build heatmap (last 26 weeks = ~6 months)
+  const weeksBack = 26;
+  const startDay = new Date(today);
+  startDay.setDate(today.getDate() - today.getDay() - (weeksBack-1)*7);
+  let heatCols = '';
+  for (let w=0; w<weeksBack; w++) {
+    heatCols += '<div class="heatmap-col">';
+    for (let d=0; d<7; d++) {
+      const cur = new Date(startDay);
+      cur.setDate(startDay.getDate() + w*7 + d);
+      const ds = fmtDate(cur);
+      const ts = data[ds]||[];
+      const pct = ts.length ? ts.filter(t=>t.done).length/ts.length : 0;
+      let lvl = 0;
+      if (ts.length) { if(pct>=0.75) lvl=4; else if(pct>=0.5) lvl=3; else if(pct>=0.25) lvl=2; else lvl=1; }
+      const title = ts.length ? `${ds}: ${ts.filter(t=>t.done).length}/${ts.length} done` : ds;
+      heatCols += `<div class="heatmap-cell${lvl?` l${lvl}`:''}" title="${title}" onclick="selectDate('${ds}');setView('day',null)"></div>`;
+    }
+    heatCols += '</div>';
+  }
+
+  wrap.innerHTML = `
+  <div class="summary-grid">
+    <div class="summary-card"><div class="summary-num">${totalTasks}</div><div class="summary-desc">Total Tasks Created</div></div>
+    <div class="summary-card"><div class="summary-num">${doneTasks}</div><div class="summary-desc">Tasks Completed</div></div>
+    <div class="summary-card"><div class="summary-num">${activeDays}</div><div class="summary-desc">Active Days</div></div>
+    <div class="summary-card"><div class="summary-num" style="color:var(--accent2)">${avgPct}%</div><div class="summary-desc">Avg Completion Rate</div></div>
+  </div>
+  <div class="heatmap-wrap">
+    <div class="heatmap-title">Activity Heatmap — last 6 months (click any cell to view that day)</div>
+    <div style="display:flex;gap:6px;align-items:flex-start">
+      <div style="display:flex;flex-direction:column;gap:3px;margin-right:4px;padding-top:2px">
+        ${['Su','Mo','Tu','We','Th','Fr','Sa'].map((d,i)=>i%2===0?`<div style="font-size:0.55rem;color:var(--text3);height:12px;line-height:12px">${d}</div>`:`<div style="height:12px"></div>`).join('')}
+      </div>
+      <div class="heatmap" style="flex:1;flex-wrap:nowrap;overflow-x:auto">${heatCols}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:0.65rem;color:var(--text3)">
+      Less
+      <div class="heatmap-cell"></div>
+      <div class="heatmap-cell l1"></div>
+      <div class="heatmap-cell l2"></div>
+      <div class="heatmap-cell l3"></div>
+      <div class="heatmap-cell l4"></div>
+      More
+    </div>
+  </div>
+  `;
+}
+
+function setView(v, el) {
+  currentView = v;
+  document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  else document.querySelectorAll('.view-tab').forEach(t=>{ if(t.textContent.toLowerCase()===v) t.classList.add('active'); });
+  document.getElementById('view-day').style.display = v==='day' ? '' : 'none';
+  document.getElementById('view-summary').style.display = v==='summary' ? '' : 'none';
+  if (v==='summary') renderSummaryView();
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ===== SIDEBAR TOGGLE (mobile) =====
+document.getElementById('btn-sidebar-toggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('show');
+});
+
+// ===== SETUP INFO =====
+function showSetupInfo() {
+  // Show setup note in the day view
+  const existingNote = document.getElementById('setup-info');
+  if (existingNote) { existingNote.remove(); return; }
+  const box = document.createElement('div');
+  box.id = 'setup-info';
+  box.className = 'setup-box';
+  box.innerHTML = `
+  <h3>⚙ Google Drive Setup (one-time)</h3>
+  <p style="margin-bottom:8px">To enable cloud backup &amp; sync across devices:</p>
+  <ol>
+    <li>Go to <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent)">console.cloud.google.com</a></li>
+    <li>Create a project → Enable <b>Google Drive API</b></li>
+    <li>Create <b>OAuth 2.0 credentials</b> (Web application)</li>
+    <li>Add your site URL to <b>Authorized JavaScript origins</b></li>
+    <li>Copy the <b>Client ID</b> and paste it in the HTML where it says <code>YOUR_GOOGLE_CLIENT_ID</code></li>
+    <li>Host the HTML file on your server or open locally</li>
+  </ol>
+  <p style="margin-top:8px;color:var(--text3)">Until then, your data is safely stored in your browser's localStorage and you can use <b>⤓ Export</b> to download a JSON backup.</p>
+  `;
+  document.getElementById('view-day').prepend(box);
+}
+
+// ===== UPDATE TOPBAR DATE =====
+function updateTopbarDate() {
+  const now = new Date();
+  document.getElementById('topbar-date').textContent = now.toLocaleDateString('en-BD', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+
+// ===== INIT =====
+window.addEventListener('load', () => {
+  loadData();
+  updateTopbarDate();
+  setInterval(updateTopbarDate, 60000);
+  renderAll();
+  initGoogleAuth();
+});
+</script>
+</body>
+</html>
